@@ -1,17 +1,16 @@
 import * as THREE from 'three';
-import { Hands } from '@mediapipe/hands';
-import GUI from 'lil-gui';
 
-// --- 1. SETUP SCENE ---
+// Import Mediapipe secara direct
+const hands = new window.Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.autoClearColor = false; 
 document.body.appendChild(renderer.domElement);
 
-// --- 2. PARTICLE PATTERNS ---
 const particleCount = 3000;
 const geometry = new THREE.BufferGeometry();
 const positions = new Float32Array(particleCount * 3);
@@ -46,133 +45,62 @@ function setHeartPattern() {
 }
 
 setBoxPattern();
-
-const material = new THREE.PointsMaterial({ 
-    size: 0.07, 
-    color: 0x00ff88, 
-    transparent: true, 
-    opacity: 0.8,
-    blending: THREE.AdditiveBlending 
-});
+const material = new THREE.PointsMaterial({ size: 0.07, color: 0x00ff88, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
 const particles = new THREE.Points(geometry, material);
 scene.add(particles);
 camera.position.z = 20;
 
-// --- 3. UI & TRACKING ---
-const gui = new GUI();
-const settings = { color: '#00ff88', trailOpacity: 0.15, followSpeed: 0.1 };
-gui.addColor(settings, 'color').onChange(v => { if (lastPattern === 'Box') particles.material.color.set(v); });
-gui.add(settings, 'trailOpacity', 0.01, 0.4).name('Trail Length');
-
-let targetPos = new THREE.Vector3(0, 0, 0);
-let targetRot = new THREE.Euler(0, 0, 0);
-let targetScale = 1;
-let currentPos = new THREE.Vector3(0, 0, 0);
-let isLoveMode = false;
-let lastPattern = 'Box';
-
-// --- 4. HAND TRACKING (Isyarat Thumbs Up 👍) ---
-const videoElement = document.getElementById('webcam');
-const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+let targetPos = new THREE.Vector3(0, 0, 0), targetRot = new THREE.Euler(0, 0, 0), targetScale = 1;
+let currentPos = new THREE.Vector3(0, 0, 0), isLoveMode = false, lastPattern = 'Box';
 
 hands.onResults((results) => {
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const lm = results.multiHandLandmarks[0];
-
-        // Position & Rotation Tracking
         targetPos.set((0.5 - lm[9].x) * 30, (0.5 - lm[9].y) * 20, 0);
-        const dX = lm[9].x - lm[0].x;
-        const dY = lm[9].y - lm[0].y;
-        targetRot.set(0, (lm[3].x - lm[17].x) * 2, Math.atan2(dY, dX) + Math.PI/2);
-        
-        const dist3D = Math.sqrt(Math.pow(lm[9].x - lm[0].x, 2) + Math.pow(lm[9].y - lm[0].y, 2));
-        targetScale = dist3D * 8;
+        targetRot.set(0, (lm[3].x - lm[17].x) * 2, Math.atan2(lm[9].y - lm[0].y, lm[9].x - lm[0].x) + Math.PI/2);
+        targetScale = Math.sqrt(Math.pow(lm[9].x - lm[0].x, 2) + Math.pow(lm[9].y - lm[0].y, 2)) * 8;
 
-        // Logik Pengesanan Baru
         const distPinch = Math.sqrt(Math.pow(lm[4].x - lm[8].x, 2) + Math.pow(lm[4].y - lm[8].y, 2));
-        
-        // Jari terbuka (Index, Middle, Ring, Pinky)
-        const isIndexOpen = lm[8].y < lm[6].y;
-        const isMiddleOpen = lm[12].y < lm[10].y;
-        const isRingOpen = lm[16].y < lm[14].y;
-        const isPinkyOpen = lm[20].y < lm[18].y;
-        const openCount = [isIndexOpen, isMiddleOpen, isRingOpen, isPinkyOpen].filter(Boolean).length;
-
-        // Ciri Thumbs Up: Ibu jari (4) lebih tinggi dari sendi (3, 2) & jari lain tutup
+        const openCount = [lm[8].y < lm[6].y, lm[12].y < lm[10].y, lm[16].y < lm[14].y, lm[20].y < lm[18].y].filter(Boolean).length;
         const isThumbUp = lm[4].y < lm[3].y && lm[4].y < lm[2].y;
 
-        let detected = lastPattern;
-
-        if (openCount >= 3) {
-            detected = 'Sphere';
-        } else if (distPinch < 0.08) {
-            detected = 'Heart';
-        } else if (isThumbUp && openCount === 0) {
-            detected = 'Box';
-        }
+        let detected = (openCount >= 3) ? 'Sphere' : (distPinch < 0.08 ? 'Heart' : (isThumbUp && openCount === 0 ? 'Box' : lastPattern));
 
         if (detected !== lastPattern) {
-            if (detected === 'Heart') { 
-                setHeartPattern(); 
-                isLoveMode = true; 
-                particles.material.color.set('#ff0066'); 
-            }
-            else if (detected === 'Sphere') { 
-                setSpherePattern(); 
-                isLoveMode = false; 
-                particles.material.color.set(0x2f43a5); 
-            }
-            else if (detected === 'Box') { 
-                setBoxPattern(); 
-                isLoveMode = false; 
-                particles.material.color.set(settings.color); 
-            }
+            if (detected === 'Heart') { setHeartPattern(); isLoveMode = true; particles.material.color.set('#ff0066'); }
+            else if (detected === 'Sphere') { setSpherePattern(); isLoveMode = false; particles.material.color.set(0x2f43a5); }
+            else if (detected === 'Box') { setBoxPattern(); isLoveMode = false; particles.material.color.set(0x00ff88); }
             lastPattern = detected;
         }
     }
 });
 
-// --- 5. ANIMATION LOOP ---
 function animate() {
     requestAnimationFrame(animate);
-
-    const fadeOverlay = new THREE.Mesh(
-        new THREE.PlaneGeometry(100, 100),
-        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: settings.trailOpacity })
-    );
-    fadeOverlay.position.z = 10;
-    scene.add(fadeOverlay);
-
-    currentPos.lerp(targetPos, settings.followSpeed);
+    currentPos.lerp(targetPos, 0.1);
     particles.position.copy(currentPos);
-    
-    particles.rotation.x = THREE.MathUtils.lerp(particles.rotation.x, targetRot.x, 0.1);
-    particles.rotation.y = THREE.MathUtils.lerp(particles.rotation.y, targetRot.y, 0.1);
-    particles.rotation.z = THREE.MathUtils.lerp(particles.rotation.z, targetRot.z, 0.1);
-
+    particles.rotation.set(
+        THREE.MathUtils.lerp(particles.rotation.x, targetRot.x, 0.1),
+        THREE.MathUtils.lerp(particles.rotation.y, targetRot.y, 0.1),
+        THREE.MathUtils.lerp(particles.rotation.z, targetRot.z, 0.1)
+    );
     const s = THREE.MathUtils.lerp(particles.scale.x, targetScale, 0.1);
     particles.scale.set(s, s, s);
-
-    if (isLoveMode) {
-        const pulse = 1 + Math.sin(Date.now() * 0.01) * 0.15;
-        particles.scale.multiplyScalar(pulse);
-    }
-    
+    if (isLoveMode) particles.scale.multiplyScalar(1 + Math.sin(Date.now() * 0.01) * 0.15);
     renderer.render(scene, camera);
-    scene.remove(fadeOverlay);
 }
 
+const videoElement = document.getElementById('webcam');
 async function start() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    videoElement.srcObject = stream;
-    videoElement.play();
-    const sendVideo = async () => {
-        await hands.send({ image: videoElement });
-        requestAnimationFrame(sendVideo);
-    };
-    sendVideo();
+    videoElement.srcObject = stream; videoElement.play();
+    const cameraUtils = new window.Camera(videoElement, { onFrame: async () => { await hands.send({ image: videoElement }); } });
+    cameraUtils.start();
 }
 
-start();
-animate();
+// Load Mediapipe scripts secara dinamik (Penting untuk GitHub Pages)
+const script1 = document.createElement('script'); script1.src = "https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js";
+const script2 = document.createElement('script'); script2.src = "https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js";
+document.head.appendChild(script1); document.head.appendChild(script2);
+
+script2.onload = () => { start(); animate(); };
