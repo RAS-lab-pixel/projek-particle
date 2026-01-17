@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Gesture Particle System</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; color: white; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; }
+        #ui-panel {
+            position: absolute; top: 20px; left: 20px; padding: 20px;
+            background: rgba(0, 0, 0, 0.7); -webkit-backdrop-filter: blur(10px); 
+    backdrop-filter: blur(10px);
+            border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
+        }
+        /* Sembunyikan video tapi biarkan ia aktif untuk diproses */
+        #webcam { transform: scaleX(-1); position: fixed; bottom: 10px; right: 10px; width: 160px; height: 120px; border-radius: 8px; border: 2px solid #00ff88; }
+        button { background: #00ff88; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="ui-panel">
+        <h2 style="margin-top:0">Particle Controller</h2>
+        <p>Hand Distance: <span id="dist-val">0</span></p>
+        <button onclick="document.documentElement.requestFullscreen()">Fullscreen Mode</button>
+    </div>
+
+    <video id="webcam" autoplay playsinline></video>
+
+    <script type="module" src="/main.js"></script>
+</body>
+</html>
